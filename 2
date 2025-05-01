@@ -1,28 +1,100 @@
--- GUI CORRIGIDA
+-- Variáveis principais
 local player = game.Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
+local mouse = player:GetMouse()
+local RunService = game:GetService("RunService")
 
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ESP_Aimbot_GUI"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
+local ESP_ENABLED = false
+local AIMBOT_ENABLED = false
+local TEAM_CHECK = true
+local FOV = 100
 
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 150, 0, 40)
-toggleButton.Position = UDim2.new(0, 20, 0, 20)
-toggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Font = Enum.Font.SourceSansBold
-toggleButton.TextSize = 18
-toggleButton.Text = "Ativar ESP/Aimbot"
-toggleButton.Parent = screenGui
+-- GUI simples
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+gui.Name = "ESP_Aimbot_GUI"
 
--- ESTADOS
-local espEnabled = false
-local aimbotEnabled = false
+local toggle = Instance.new("TextButton", gui)
+toggle.Position = UDim2.new(0, 20, 0, 20)
+toggle.Size = UDim2.new(0, 180, 0, 40)
+toggle.Text = "Ativar ESP + Aimbot"
+toggle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggle.TextColor3 = Color3.new(1, 1, 1)
+toggle.Font = Enum.Font.SourceSansBold
+toggle.TextSize = 18
 
-toggleButton.MouseButton1Click:Connect(function()
-    espEnabled = not espEnabled
-    aimbotEnabled = not aimbotEnabled
-    toggleButton.Text = espEnabled and "Desativar ESP/Aimbot" or "Ativar ESP/Aimbot"
+toggle.MouseButton1Click:Connect(function()
+    ESP_ENABLED = not ESP_ENABLED
+    AIMBOT_ENABLED = ESP_ENABLED
+    toggle.Text = ESP_ENABLED and "Desativar ESP + Aimbot" or "Ativar ESP + Aimbot"
+end)
+
+-- Função para criar ESP
+local espBoxes = {}
+
+function createESPBox(player)
+    local box = Drawing.new("Square")
+    box.Color = Color3.new(1, 0, 0)
+    box.Thickness = 2
+    box.Transparency = 1
+    box.Filled = false
+    box.Visible = false
+    espBoxes[player] = box
+end
+
+-- Atualiza ESP
+RunService.RenderStepped:Connect(function()
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            if not espBoxes[plr] then
+                createESPBox(plr)
+            end
+
+            local box = espBoxes[plr]
+            local root = plr.Character.HumanoidRootPart
+            local pos, visible = camera:WorldToViewportPoint(root.Position)
+
+            if ESP_ENABLED and visible and (not TEAM_CHECK or plr.Team ~= player.Team) then
+                local size = Vector2.new(50, 100)
+                box.Position = Vector2.new(pos.X - size.X/2, pos.Y - size.Y/2)
+                box.Size = size
+                box.Visible = true
+            else
+                box.Visible = false
+            end
+        elseif espBoxes[plr] then
+            espBoxes[plr].Visible = false
+        end
+    end
+end)
+
+-- Aimbot
+function getClosestEnemy()
+    local closest = nil
+    local shortest = FOV
+
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("Head") then
+            if TEAM_CHECK and plr.Team == player.Team then continue end
+
+            local pos, onScreen = camera:WorldToViewportPoint(plr.Character.Head.Position)
+            local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(mouse.X, mouse.Y)).Magnitude
+
+            if onScreen and dist < shortest then
+                shortest = dist
+                closest = plr
+            end
+        end
+    end
+
+    return closest
+end
+
+-- Trava mira
+RunService.RenderStepped:Connect(function()
+    if AIMBOT_ENABLED then
+        local target = getClosestEnemy()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            camera.CFrame = CFrame.new(camera.CFrame.Position, target.Character.Head.Position)
+        end
+    end
 end)
